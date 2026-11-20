@@ -1,23 +1,42 @@
+#include "constantes.h"
+#include "tablero.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h> 
-
-char letraAleatoria(void); //Prototipo da função que retorna una letra aleatória
+#include <time.h>
 
 int main(void) {
-    
-    srand(time(NULL)); // Inicializa o gerador de números aleatórios con base no tiempo actual
+  srand(time(NULL));
 
-    char letra = letraAleatoria(); // Chama a função para obter uma letra aleatória
-    printf("Letra aleatória: %c\n", letra); // Imprime a la letra aleatora generada
+  int opt;
+  char tablero[MAX_ROWS][MAX_COLS];
 
-    return 0;
+  do {
+
+    printf("==== Sopa de Letras ====\n"
+           "[1] Jugar\n"
+           "[2] Créditos\n"
+           "[3] High Score\n"
+           "[4] Añadir Palabras\n"
+           "[5] Salir\n");
+    scanf("%d", &opt);
+
+    switch (opt) {
+
+    case 1:
+      llenarTablero(tablero);
+      mostrarTablero(tablero);
+      break;
+    case 2:
+      printf("Creditos\n");
+      break;
+    case 3:
+      printf("Highscore\n");
+      break;
+    case 4:
+      printf("Anadir palabras\n");
+    }
+
+  } while (opt != 5);
+
+  return 0;
 }
-
-char letraAleatoria(void) {
-
-    int posicion = rand() % 26; // Crea un número aleatoro entre 0 y 25
-    char letra = 'A' + posicion; // Convierte el número aleatorio en una letra mayúscula correspondiente (A-Z)
-    return letra; // Retorna a letra aleatoria
-}
-
