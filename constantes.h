@@ -20,6 +20,6 @@
 #define RESET "\033[0m"
 
 #define ARCH_PALABRAS "palabras.txt"
-#define ARCH_SCORES "highscores.d"
+#define ARCH_SCORES "highscores.bin"
 
 #endif
