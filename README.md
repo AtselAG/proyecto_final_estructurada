@@ -1,2 +1,10 @@
 # proyecto_final_estructurada
+
 sopa de letras pedorra
+
+TODO
+-VALIDACION COMPLETA
+-HIGHSCORE
+-CREDITOS
+-COLORES A LAS PALABRAS
+-TACHAR PALABRAS ENCONTRADAS
