@@ -1,4 +1,5 @@
 #include "constantes.h"
+#include "pokeapi.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -62,6 +63,7 @@ void solicitarNombre(Jugador *jugador);
 int main(void) {
   int opt;
   srand(time(NULL)); // la semilla se pone UNA sola vez al inicio del programa
+  iniciarPokeAPI();  // prepara curl para poder consultar la PokeAPI
 
   do {
     printf("==== Sopa de Letras ====\n"
@@ -90,6 +92,7 @@ int main(void) {
 
   } while (opt != 5);
 
+  cerrarPokeAPI();
   return 0;
 }
 
@@ -257,6 +260,8 @@ int seleccionarPalabras(Palabra palabras[]) {
   return cantidad;
 }
 
+// Regresa la posicion (0..NUM_PALABRAS-1) de la palabra que encontro el
+// jugador, o -1 si no encontro ninguna.
 int validarCoordenadas(char tablero[TAM][TAM], int filaIni, int colIni,
                        int filaFin, int colFin, Palabra palabras[]) {
   char seleccion[MAX_LEN];
@@ -345,11 +350,11 @@ int validarCoordenadas(char tablero[TAM][TAM], int filaIni, int colIni,
       palabras[i].xi = colIni;
       palabras[i].yf = filaFin;
       palabras[i].xf = colFin;
-      break; // ya la encontramos, no hay que revisar las demas
+      return i; // regresamos CUAL palabra encontro (su posicion en el arreglo)
     }
   }
 
-  return -1;
+  return -1; // no encontro ninguna
 }
 
 int existePalabra(const char *pokemon) {
@@ -600,6 +605,8 @@ void jugar() {
   int encontradas; // cuantas palabras lleva encontradas el jugador
   int antes;       // cuantas llevaba antes del ultimo intento
   int rendido;     // 1 si el jugador se rindio (salir o 0,0)
+  int idx;         // cual palabra encontro (o -1 si ninguna)
+  time_t pausa;    // para no contar el tiempo que pasa leyendo la Pokedex
   seleccionarPalabras(palabras);
   limpiarTablero(&sopa);
 
@@ -644,12 +651,21 @@ void jugar() {
     }
 
     antes = encontradas;
-    validarCoordenadas(sopa.tablero, yi, xi, yf, xf, palabras);
+    idx = validarCoordenadas(sopa.tablero, yi, xi, yf, xf, palabras);
     encontradas = contarEncontradas(palabras);
 
     if (encontradas > antes) {
       printf("Encontraste una palabra nueva! (%d de %d)\n", encontradas,
              NUM_PALABRAS);
+
+      // Mostramos la info del pokemon. El tiempo que tarda la API y lo que
+      // tardas en leer NO cuenta para el highscore: lo sumamos a inicio.
+      pausa = time(NULL);
+      mostrarInfoPokemon(palabras[idx].texto);
+      printf("Presiona ENTER para seguir...");
+      while (getchar() != '\n')
+        ;
+      inicio += time(NULL) - pausa;
     } else {
       printf("No encontraste ninguna palabra nueva con esas coordenadas.\n");
     }
