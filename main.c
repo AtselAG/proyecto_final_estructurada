@@ -1,4 +1,5 @@
 #include "constantes.h"
+#include <cctype>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,12 +7,12 @@
 
 enum estado_palabra { ENCONTRADA, NO_ENCONTRADA };
 
-typedef struct tablero {
+typedef struct sopa {
 
   char tablero[TAM][TAM];
   int lleno;
 
-} Tablero;
+} Sopa;
 
 typedef struct palabra {
 
@@ -30,22 +31,25 @@ typedef struct jugador {
 } Jugador;
 
 char letraAleatoria(void);
-void mostrarTablero(char tablero[TAM][TAM]);
-void llenarTablero(char tablero[TAM][TAM]);
+void mostrarTablero(Sopa *sopa);
+void llenarTablero(Sopa *sopa);
 int seleccionarPalabras(Palabra palabras[]);
+int colocarPalabra(Sopa *sopa, Palabra *p, int idx);
+void limpiarTablero(Sopa *sopa);
 
 int main(void) {
   srand(time(NULL));
   int opt;
   Palabra palabras[NUM_PALABRAS];
+  Sopa sopa;
 
   do {
 
     printf("==== Sopa de Letras ====\n"
            "[1] Jugar\n"
-           "[2] Créditos\n"
+           "[2] Creditos\n"
            "[3] High Score\n"
-           "[4] Añadir Palabras\n"
+           "[4] Anadir Palabras\n"
            "[5] Salir\n");
     scanf("%d", &opt);
 
@@ -53,9 +57,17 @@ int main(void) {
 
     case 1:
       seleccionarPalabras(palabras);
+      limpiarTablero(&sopa);
+
+      for (int i = 0; i < NUM_PALABRAS; i++) {
+        colocarPalabra(&sopa, palabras, i);
+      }
       for (int i = 0; i < NUM_PALABRAS; i++) {
         printf("%s\n", palabras[i].texto);
       }
+      llenarTablero(&sopa);
+      mostrarTablero(&sopa);
+
       break;
     case 2:
       printf("Creditos\n");
@@ -72,7 +84,57 @@ int main(void) {
   return 0;
 }
 
-void putInBoard(Palabra palabras[]) {}
+enum direccion {
+  ARRIBA_DERECHA,
+  ARRIBA_IZQUIERDA,
+  ABAJO_DERECHA,
+  ABAJO_IZQUIERDA
+};
+
+int colocarPalabra(Sopa *sopa, Palabra p[], int idx) {
+
+  int len = strlen(p[idx].texto);
+  if (len == 0 || len > TAM)
+    return 0;
+
+  for (int intento = 0; intento < 100; intento++) {
+    int horizontal = rand() % 2;
+    int diagonal = rand() % 2;
+    int direccion = rand() % 4;
+    int fila = rand() % (horizontal ? TAM : TAM - len + 1);
+    int col = rand() % (horizontal ? TAM - len + 1 : TAM);
+
+    // checar que quepa (se vale cruzarse si es la misma letra)
+    int cabe = 1;
+    for (int k = 0; k < len; k++) {
+      int r = horizontal ? fila : fila + k;
+      int c = horizontal ? col + k : col;
+      char actual = sopa->tablero[r][c];
+      if (actual != '\0' && actual != p[idx].texto[k]) {
+        cabe = 0;
+        break;
+      }
+    }
+    if (!cabe)
+      continue;
+
+    // ahora sí la escribimos letra por letra
+    for (int k = 0; k < len; k++) {
+      int r = horizontal ? fila : fila + k;
+      int c = horizontal ? col + k : col;
+      sopa->tablero[r][c] = toupper(p[idx].texto[k]);
+    }
+
+    p->yi = fila;
+    p->xi = col;
+    p->yf = horizontal ? fila : fila + len - 1;
+    p->xf = horizontal ? col + len - 1 : col;
+    p->encontrada = NO_ENCONTRADA;
+    return 1;
+  }
+
+  return 0; // no cupo después de 100 intentos
+}
 
 char letraAleatoria(void) {
 
@@ -81,29 +143,31 @@ char letraAleatoria(void) {
   return letra;
 }
 
-void llenarTablero(char tablero[TAM][TAM]) {
+void llenarTablero(Sopa *sopa) {
 
   for (int rows = 0; rows < TAM; rows++) {
     for (int cols = 0; cols < TAM; cols++) {
-      tablero[rows][cols] = letraAleatoria();
+      if (sopa->tablero[rows][cols] == '\0')
+        sopa->tablero[rows][cols] = letraAleatoria();
     }
   }
 }
 
-void mostrarTablero(char tablero[TAM][TAM]) {
+void limpiarTablero(Sopa *sopa) {
+  memset(sopa->tablero, '\0', sizeof(sopa->tablero));
+}
+
+void mostrarTablero(Sopa *sopa) {
 
   printf("=============================================\n");
   for (int rows = 0; rows < TAM; rows++) {
     for (int cols = 0; cols < TAM; cols++) {
-      printf(" %c ", tablero[rows][cols]);
+      printf(" %c ", sopa->tablero[rows][cols]);
     }
     printf("\n");
   }
   printf("=============================================\n");
 }
-
-#define MAX_PALABRAS_ARCHIVO 100
-#define MAX_SELECCION 10
 
 int seleccionarPalabras(Palabra palabras[]) {
   char todas[MAX_PALABRAS_ARCHIVO][MAX_LEN];
