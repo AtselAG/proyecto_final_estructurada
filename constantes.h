@@ -12,6 +12,7 @@
 #define MAX_INTENTOS 100 /* intentos para colocar una palabra       */
 #define MAX_PALABRAS_ARCHIVO 100
 #define MAX_SELECCION 10
+#define MAX_SCORES 100
 
 /* Colores ANSI para marcar las palabras encontradas */
 #define VERDE "\033[1;32m"

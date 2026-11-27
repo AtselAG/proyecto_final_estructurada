@@ -36,7 +36,8 @@ typedef struct jugador {
 } Jugador;
 
 char letraAleatoria(void);
-void mostrarTablero(Sopa *sopa, int filaMarca, int colMarca);
+void mostrarTablero(Sopa *sopa, int filaMarca, int colMarca,
+                    Palabra palabras[]);
 void llenarTablero(Sopa *sopa);
 int seleccionarPalabras(Palabra palabras[]);
 int colocarPalabra(Sopa *sopa, Palabra p[], int idx);
@@ -51,17 +52,16 @@ int readHS(void);
 int line_count(FILE *file);
 void to_uppercase(char cad[]);
 int esNumero(char texto[]);
-void leerCoordenada(int *x, int *y);
+int leerCoordenada(int *x, int *y);
 int contarEncontradas(Palabra palabras[]);
+int celdaEncontrada(Palabra palabras[], int fila, int col);
+void mostrarListaPalabras(Palabra palabras[]);
+void jugar();
+void solicitarNombre(Jugador *jugador);
 
 int main(void) {
-  srand(time(NULL));
   int opt;
-  Palabra palabras[NUM_PALABRAS];
-  Sopa sopa;
-  int xi, xf, yi, yf;
-  int encontradas; // cuantas palabras lleva encontradas el jugador
-  int antes;       // cuantas llevaba antes del ultimo intento
+  srand(time(NULL)); // la semilla se pone UNA sola vez al inicio del programa
 
   do {
     printf("==== Sopa de Letras ====\n"
@@ -75,60 +75,13 @@ int main(void) {
     switch (opt) {
 
     case 1:
-      seleccionarPalabras(palabras);
-      limpiarTablero(&sopa);
-
-      for (int i = 0; i < NUM_PALABRAS; i++) {
-        colocarPalabra(&sopa, palabras, i);
-      }
-
-      llenarTablero(&sopa);
-      //  Repetimos hasta que el jugador encuentre todas las palabras.
-      encontradas = 0;
-      while (encontradas < NUM_PALABRAS) {
-
-        // Mostramos solo las palabras que todavia faltan por encontrar.
-        printf("\nPalabras por encontrar (llevas %d de %d):\n", encontradas,
-               NUM_PALABRAS);
-        for (int i = 0; i < NUM_PALABRAS; i++) {
-          if (palabras[i].encontrada == NO_ENCONTRADA) {
-            printf("%s\n", palabras[i].texto);
-          }
-        }
-
-        mostrarTablero(&sopa, -1,
-                       -1); // -1, -1 = todavia no hay ninguna letra en amarillo
-        printf("Ingresa una coordenada inicial (x,y): ");
-        // leerCoordenada lee lo escrito como 4,8 y guarda la columna en xi y
-        // la fila en yi.
-        leerCoordenada(&xi, &yi);
-
-        mostrarTablero(&sopa, yi, xi);
-        printf("Ingresa una coordenada final (x,y): ");
-        leerCoordenada(&xf, &yf);
-
-        antes = encontradas;
-        validarCoordenadas(sopa.tablero, yi, xi, yf, xf, palabras);
-        encontradas = contarEncontradas(palabras);
-
-        if (encontradas > antes) {
-          printf("Encontraste una palabra nueva! (%d de %d)\n", encontradas,
-                 NUM_PALABRAS);
-        } else {
-          printf(
-              "No encontraste ninguna palabra nueva con esas coordenadas.\n");
-        }
-      }
-
-      printf("\nEncontraste las %d palabras!\n", NUM_PALABRAS);
-
+      jugar();
       break;
     case 2:
       creditos();
       break;
     case 3:
       readHS();
-      printf("Highscore\n");
       break;
     case 4:
       agregarPalabras();
@@ -166,7 +119,7 @@ int colocarPalabra(Sopa *sopa, Palabra p[], int idx) {
     int cabe = 1;
     for (int k = 0; k < len; k++) {
       char actual = sopa->tablero[fila + k * dr][col + k * dc];
-      if (actual != '\0' && actual != w->texto[k]) {
+      if (actual != '\0' && actual != toupper((unsigned char)w->texto[k])) {
         cabe = 0;
         break;
       }
@@ -176,7 +129,10 @@ int colocarPalabra(Sopa *sopa, Palabra p[], int idx) {
 
     // ahora sí la escribimos letra por letra
     for (int k = 0; k < len; k++)
-      sopa->tablero[fila + k * dr][col + k * dc] = w->texto[k];
+      sopa->tablero[fila + k * dr][col + k * dc] =
+          toupper((unsigned char)w->texto[k]); // letra en mayuscula en el
+                                               // tablero, aunque el archivo la
+                                               // tenga en minuscula
 
     w->yi = fila;
     w->xi = col;
@@ -210,7 +166,10 @@ void limpiarTablero(Sopa *sopa) {
   memset(sopa->tablero, '\0', sizeof(sopa->tablero));
 }
 
-void mostrarTablero(Sopa *sopa, int filaMarca, int colMarca) {
+// palabras se usa para pintar en verde las casillas de las palabras ya
+// encontradas y para imprimir la lista de palabras debajo del tablero.
+void mostrarTablero(Sopa *sopa, int filaMarca, int colMarca,
+                    Palabra palabras[]) {
 
   printf("=============================================\n");
 
@@ -218,17 +177,23 @@ void mostrarTablero(Sopa *sopa, int filaMarca, int colMarca) {
   // lugar al numero de fila).
   printf("   ");
   for (int cols = 0; cols < TAM; cols++) {
-    printf("%2d ", cols);
+    printf("%2d ", cols + 1); // +1: el jugador ve del 1 al 15, por dentro el
+                              // arreglo va de 0 a 14
   }
   printf("\n");
 
   for (int rows = 0; rows < TAM; rows++) {
-    printf("%2d ", rows); // numero de la fila al inicio del renglon
+    printf("%2d ", rows + 1); // numero de la fila al inicio del renglon (+1: se
+                              // ve del 1 al 15)
     for (int cols = 0; cols < TAM; cols++) {
       if (rows == filaMarca && cols == colMarca) {
         // Esta es la letra marcada: se imprime en amarillo (AMARI y RESET
         // vienen de constantes.h).
         printf(" " AMARI "%c" RESET " ", sopa->tablero[rows][cols]);
+      } else if (celdaEncontrada(palabras, rows, cols)) {
+        // Casilla que pertenece a una palabra ya encontrada: se imprime en
+        // verde (VERDE viene de constantes.h).
+        printf(" " VERDE "%c" RESET " ", sopa->tablero[rows][cols]);
       } else {
         printf(" %c ", sopa->tablero[rows][cols]);
       }
@@ -236,6 +201,9 @@ void mostrarTablero(Sopa *sopa, int filaMarca, int colMarca) {
     printf("\n");
   }
   printf("=============================================\n");
+
+  // Debajo del tablero: la lista de palabras (verde = encontrada).
+  mostrarListaPalabras(palabras);
 }
 
 int seleccionarPalabras(Palabra palabras[]) {
@@ -324,11 +292,22 @@ int validarCoordenadas(char tablero[TAM][TAM], int filaIni, int colIni,
   // Recorremos desde la coordenada inicial hasta la final, sumando o restando
   // 1 cada paso
   for (k = 0; k < largo; k++)
-    seleccion[k] = tablero[filaIni + k * pasoFila][colIni + k * pasoCol];
+    seleccion[k] = toupper(
+        (unsigned char)tablero[filaIni + k * pasoFila]
+                              [colIni + k * pasoCol]); // toupper: se compara
+                                                       // en mayusculas aunque
+                                                       // el tablero tenga
+                                                       // minusculas
 
   seleccion[largo] = '\0';
 
   for (i = 0; i < NUM_PALABRAS; i++) {
+    // Si ya la habia encontrado, la saltamos (asi no se "mueve" a otra copia
+    // de la misma palabra que haya en el tablero).
+    if (palabras[i].encontrada == ENCONTRADA) {
+      continue;
+    }
+
     largoPalabra = strlen(palabras[i].texto);
 
     if (largoPalabra != largo) {
@@ -357,6 +336,16 @@ int validarCoordenadas(char tablero[TAM][TAM], int filaIni, int colIni,
 
     if (coincide || coincideInv) {
       palabras[i].encontrada = ENCONTRADA;
+
+      // Guardamos las casillas que ELIGIO el jugador, no donde la puso
+      // colocarPalabra. Si las letras de relleno formaron otra copia de la
+      // palabra y el jugador marco esa, el verde se pinta justo ahi y no en
+      // otro lado.
+      palabras[i].yi = filaIni;
+      palabras[i].xi = colIni;
+      palabras[i].yf = filaFin;
+      palabras[i].xf = colFin;
+      break; // ya la encontramos, no hay que revisar las demas
     }
   }
 
@@ -387,7 +376,7 @@ int agregarPalabras(void) {
 
   while (1) {
     printf("Escribe un pokemon para agregar (salir para salir): ");
-    if (scanf("%49s", pokemon) != 1) // 49 = MAX_LEN - 1
+    if (scanf("%15s", pokemon) != 1) // 15 = MAX_LEN - 1
       break;
     to_uppercase(pokemon);
 
@@ -413,7 +402,7 @@ int agregarPalabras(void) {
 }
 
 int saveHS(Jugador *jugador) {
-  FILE *highscore = fopen(ARCH_SCORES, "ab");
+  FILE *highscore = fopen(ARCH_SCORES, "a");
   if (highscore == NULL)
     return 1;
   fprintf(highscore, "%s,%d\n", jugador->nombre, jugador->tiempo);
@@ -422,14 +411,63 @@ int saveHS(Jugador *jugador) {
 }
 
 int readHS(void) {
-  FILE *highscore = fopen(ARCH_SCORES, "rb");
-  if (highscore == NULL)
+  Jugador jugadores[MAX_SCORES]; // aqui guardamos todos los scores del archivo
+  Jugador temp;             // auxiliar para intercambiar en el ordenamiento
+  char linea[MAX_LEN + 20]; // una linea del archivo: "nombre,tiempo"
+  char *coma;               // apunta a la coma que separa nombre y tiempo
+  int total = 0;            // cuantos scores leimos
+  int i, j;
+
+  FILE *highscore = fopen(ARCH_SCORES, "r");
+  if (highscore == NULL) {
+    printf("Todavia no hay highscores guardados.\n");
     return 1;
-  // while (fread(&buffer, sizeof(buffer), n, mi_archivo) != NULL) {
-  //   printf("%s", buffer);
-  // }
+  }
+
+  // Leemos linea por linea hasta que se acabe el archivo o se llene el arreglo
+  while (total < MAX_SCORES && fgets(linea, sizeof(linea), highscore) != NULL) {
+    linea[strcspn(linea, "\r\n")] = '\0'; // quitamos el salto de linea
+
+    // Buscamos la ULTIMA coma (por si el nombre trae alguna coma)
+    coma = strrchr(linea, ',');
+    if (coma == NULL) {
+      continue; // linea mal formada, la saltamos
+    }
+
+    *coma = '\0'; // cortamos la cadena: lo de antes de la coma es el nombre
+    strncpy(jugadores[total].nombre, linea, MAX_LEN - 1);
+    jugadores[total].nombre[MAX_LEN - 1] = '\0';
+    jugadores[total].tiempo = atoi(coma + 1); // lo de despues es el tiempo
+    total++;
+  }
 
   fclose(highscore);
+
+  if (total == 0) {
+    printf("Todavia no hay highscores guardados.\n");
+    return 1;
+  }
+
+  // Ordenamos con burbuja de menor a mayor tiempo (el mas rapido primero)
+  for (i = 0; i < total - 1; i++) {
+    for (j = 0; j < total - 1 - i; j++) {
+      if (jugadores[j].tiempo > jugadores[j + 1].tiempo) {
+        temp = jugadores[j];
+        jugadores[j] = jugadores[j + 1];
+        jugadores[j + 1] = temp;
+      }
+    }
+  }
+
+  // Imprimimos la tabla
+  printf("========== HIGH SCORES ==========\n");
+  printf("%-4s %-20s %s\n", "#", "Nombre", "Tiempo");
+  for (i = 0; i < total; i++) {
+    printf("%-4d %-20s %d s\n", i + 1, jugadores[i].nombre,
+           jugadores[i].tiempo);
+  }
+  printf("=================================\n");
+
   return 0;
 }
 
@@ -491,7 +529,7 @@ int contarEncontradas(Palabra palabras[]) {
   return total;
 }
 
-void leerCoordenada(int *x, int *y) {
+int leerCoordenada(int *x, int *y) {
   char textoX[10]; // lo que escribio el jugador para la columna (hasta 9
                    // caracteres + '\0')
   char textoY[10]; // lo que escribio el jugador para la fila
@@ -508,6 +546,14 @@ void leerCoordenada(int *x, int *y) {
 
     while ((c = getchar()) != '\n' && c != EOF) {
       // no hace nada, solo consume caracteres
+    }
+
+    // Si el jugador escribio salir (salir, Salir, SALIR...), se rinde:
+    // retornamos 0. to_uppercase es la funcion que ya existia; pasa el texto a
+    // mayusculas.
+    to_uppercase(textoX);
+    if (strcmp(textoX, "SALIR") == 0) {
+      return 0;
     }
 
     // Si el jugador escribio los parentesis, como (4,8), los quitamos.
@@ -531,6 +577,159 @@ void leerCoordenada(int *x, int *y) {
     }
   } while (!valido); // se repite hasta que los dos sean numeros
 
-  *x = atoi(textoX); // atoi convierte el texto "12" en el numero 12: la columna
-  *y = atoi(textoY); // lo mismo para la fila
+  *x = atoi(textoX) - 1; // atoi convierte el texto "12" en el numero 12; el -1
+                         // pasa de 1-15 (lo que ve el jugador) a 0-14 (el
+                         // arreglo): la columna
+  *y = atoi(textoY) - 1; // lo mismo para la fila
+
+  // Como el tablero empieza en 1, la coordenada 0,0 (que queda en -1,-1) no
+  // existe: la usamos para rendirse.
+  if (*x == -1 && *y == -1) {
+    return 0;
+  }
+
+  return 1; // se leyo una coordenada valida
+}
+
+void jugar() {
+  time_t inicio;          // momento en que empieza a correr el tiempo
+  Jugador jugador_actual; // nombre y tiempo de quien esta jugando
+  Palabra palabras[NUM_PALABRAS];
+  Sopa sopa;
+  int xi, xf, yi, yf;
+  int encontradas; // cuantas palabras lleva encontradas el jugador
+  int antes;       // cuantas llevaba antes del ultimo intento
+  int rendido;     // 1 si el jugador se rindio (salir o 0,0)
+  seleccionarPalabras(palabras);
+  limpiarTablero(&sopa);
+
+  for (int i = 0; i < NUM_PALABRAS; i++) {
+    colocarPalabra(&sopa, palabras, i);
+  }
+
+  llenarTablero(&sopa);
+
+  // Pedimos el nombre ANTES de arrancar el tiempo, para que no cuente lo que
+  // tarda en escribirlo.
+  solicitarNombre(&jugador_actual);
+  inicio = time(NULL);
+
+  //  Repetimos hasta que el jugador encuentre todas las palabras.
+  encontradas = 0;
+  rendido = 0;
+  while (encontradas < NUM_PALABRAS) {
+
+    // La lista de palabras (en verde las ya encontradas) se imprime debajo del
+    // tablero, dentro de mostrarTablero.
+    printf("\nLlevas %d de %d palabras (escribe salir o 0,0 para rendirte):\n",
+           encontradas, NUM_PALABRAS);
+
+    mostrarTablero(
+        &sopa, -1, -1,
+        palabras); // -1, -1 = todavia no hay ninguna letra en amarillo
+    printf("Ingresa una coordenada inicial (x,y): ");
+    // leerCoordenada lee lo escrito como 4,8 y guarda la columna en xi y
+    // la fila en yi.
+    // Si el jugador se rinde, leerCoordenada retorna 0: salimos del while.
+    if (!leerCoordenada(&xi, &yi)) {
+      rendido = 1;
+      break;
+    }
+
+    mostrarTablero(&sopa, yi, xi, palabras);
+    printf("Ingresa una coordenada final (x,y): ");
+    if (!leerCoordenada(&xf, &yf)) {
+      rendido = 1;
+      break;
+    }
+
+    antes = encontradas;
+    validarCoordenadas(sopa.tablero, yi, xi, yf, xf, palabras);
+    encontradas = contarEncontradas(palabras);
+
+    if (encontradas > antes) {
+      printf("Encontraste una palabra nueva! (%d de %d)\n", encontradas,
+             NUM_PALABRAS);
+    } else {
+      printf("No encontraste ninguna palabra nueva con esas coordenadas.\n");
+    }
+  }
+
+  if (rendido) {
+    // Si se rindio NO se guarda en el highscore.
+    printf("\nTe rendiste. Encontraste %d de %d palabras.\n", encontradas,
+           NUM_PALABRAS);
+  } else {
+    // PRIMERO calculamos el tiempo y DESPUES guardamos (si no, se guarda
+    // basura).
+    jugador_actual.tiempo = time(NULL) - inicio;
+    jugador_actual.palabras_encontradas = encontradas;
+
+    // Ultimo dibujo del tablero: ya con las 10 palabras en verde.
+    mostrarTablero(&sopa, -1, -1, palabras);
+    printf("\nEncontraste las %d palabras en %d segundos!\n", NUM_PALABRAS,
+           jugador_actual.tiempo);
+
+    saveHS(&jugador_actual);
+  }
+}
+
+void solicitarNombre(Jugador *jugador) {
+  printf("Ingresa tu nombre: ");
+  scanf(" %15s", jugador->nombre); // 15 = MAX_LEN - 1, para no desbordar
+  getchar();
+}
+
+// Retorna 1 si la casilla (fila, col) pertenece a alguna palabra ya encontrada,
+// 0 si no. Usa xi, yi, xf, yf de cada Palabra, que colocarPalabra ya guardo al
+// acomodarla en el tablero.
+int celdaEncontrada(Palabra palabras[], int fila, int col) {
+  int i, k; // i recorre las palabras, k recorre las letras de una palabra
+  int difFila, difCol;   // distancia entre la casilla inicial y la final de la
+                         // palabra
+  int pasoFila, pasoCol; // hacia donde avanza la palabra: -1, 0 o 1 en fila y
+                         // en columna
+  int largo;             // cuantas letras tiene la palabra en el tablero
+
+  for (i = 0; i < NUM_PALABRAS; i++) {
+    // Solo nos importan las que el jugador ya encontro.
+    if (palabras[i].encontrada != ENCONTRADA) {
+      continue;
+    }
+
+    // Mismo calculo que usa validarCoordenadas para recorrer una palabra.
+    difFila = palabras[i].yf - palabras[i].yi;
+    difCol = palabras[i].xf - palabras[i].xi;
+    pasoFila = (difFila > 0) - (difFila < 0);
+    pasoCol = (difCol > 0) - (difCol < 0);
+    largo = (abs(difFila) > abs(difCol) ? abs(difFila) : abs(difCol)) + 1;
+
+    // Recorremos las casillas de la palabra; si alguna es la que nos preguntan,
+    // retornamos 1.
+    for (k = 0; k < largo; k++) {
+      if (palabras[i].yi + k * pasoFila == fila &&
+          palabras[i].xi + k * pasoCol == col) {
+        return 1;
+      }
+    }
+  }
+
+  return 0;
+}
+
+// Imprime las NUM_PALABRAS palabras de 5 en 5 por renglon:
+// en verde las que ya se encontraron y en color normal las que faltan.
+void mostrarListaPalabras(Palabra palabras[]) {
+  for (int i = 0; i < NUM_PALABRAS; i++) {
+    if (palabras[i].encontrada == ENCONTRADA) {
+      printf(VERDE "%-14s" RESET, palabras[i].texto);
+    } else {
+      printf("%-14s", palabras[i].texto);
+    }
+
+    // Salto de renglon cada 5 palabras y al terminar la lista.
+    if ((i + 1) % 5 == 0 || i == NUM_PALABRAS - 1) {
+      printf("\n");
+    }
+  }
 }
